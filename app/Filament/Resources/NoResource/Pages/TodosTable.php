@@ -2,14 +2,24 @@
 
 namespace App\Filament\Resources\NoResource\Pages;
 
-use App\Filament\Resources\NoResource; // ✅ Agregar esta importación
-use Filament\Pages\Page;
+use App\Filament\Resources\NoResource;
+use Filament\Resources\Pages\Page;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Database\Eloquent\Builder; // ✅ Importar Builder
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Collection;
+
+class TodoModel extends Model
+{
+    protected $fillable = ['id', 'title', 'completed', 'userId'];
+    protected $casts = ['completed' => 'boolean'];
+    public $timestamps = false;
+    protected $table = null;
+}
 
 class TodosTable extends Page implements HasTable
 {
@@ -21,30 +31,26 @@ class TodosTable extends Page implements HasTable
     public function table(Table $table): Table
     {
         return $table
-            ->query(function () {
-                $response = Http::get('https://jsonplaceholder.typicode.com/todos');
-                return collect($response->json());
-            })
+            ->query(TodoModel::query())
             ->columns([
-                TextColumn::make('id')
-                    ->label('ID')
-                    ->sortable(),
-                TextColumn::make('title')
-                    ->label('Título')
-                    ->searchable()
-                    ->wrap(),
-                TextColumn::make('completed')
-                    ->label('Completada')
-                    ->boolean()
-                    ->sortable(),
+                TextColumn::make('id')->label('ID')->sortable(),
+                TextColumn::make('title')->label('Título')->searchable()->wrap(),
+                IconColumn::make('completed')->label('Completada')->boolean()->sortable(),
+                TextColumn::make('userId')->label('Usuario ID')->sortable(),
             ])
-            ->actions([ // ✅ Opcional: agregar acciones
-                // Tables\Actions\EditAction::make(),
-            ])
-            ->bulkActions([ // ✅ Opcional: agregar acciones masivas
-                // Tables\Actions\BulkActionGroup::make([
-                //     Tables\Actions\DeleteBulkAction::make(),
-                // ]),
-            ]);
+            ->paginated(true)
+            ->defaultPaginationPageOption(25);
+    }
+
+    public function getTableRecords(): Collection
+    {
+        $response = Http::get('https://jsonplaceholder.typicode.com/todos');
+
+        return collect($response->json())->map(function ($todo) {
+            $model = new TodoModel($todo);
+            $model->exists = true;
+            $model->setRawAttributes($todo, true);
+            return $model;
+        })->pipe(fn($models) => new Collection($models->all()));
     }
 }
